@@ -5,16 +5,27 @@
 
 #pragma once
 
-#define _CRT_SECURE_NO_WARNINGS
-
+#ifdef WIN32
 #include "targetver.h"
 
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include <stdio.h>
-#include <tchar.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <stdint.h>
 
 
-
-// TODO: プログラムに必要な追加ヘッダーをここで参照してください。
+#ifdef WIN32
 #include <io.h>
 #include <windows.h>
-
+#else
+#include <ctype.h>
+#include <arpa/inet.h>
+#include <libgen.h>
+#include <fcntl.h>
+#include <unistd.h>
+#endif

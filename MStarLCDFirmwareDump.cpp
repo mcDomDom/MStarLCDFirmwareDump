@@ -3,6 +3,20 @@
 
 #include "stdafx.h"
 
+#ifndef BYTE
+#define	BYTE unsigned char
+#endif
+#ifndef WORD
+#define	WORD unsigned short
+#endif
+#ifndef DWORD
+#define	DWORD unsigned long
+#endif
+
+#ifndef WIN32
+#define	stricmp strcasecmp
+#endif
+
 #define	_SEP_	","
 
 #pragma pack(push, 1) 
@@ -128,7 +142,7 @@ bool CheckCompress()
 */
 enMode JudgeMode(const char *szFname)
 {
-	char	szFnameUpper[_MAX_FNAME]; 
+	char	szFnameUpper[256]; 
 
 	enMode mode = UNKNOWN;
 	memset(szFnameUpper, 0x00, sizeof(szFnameUpper));
@@ -284,14 +298,14 @@ template <>
 char *GetAddStr(T_Preset_15 *pInfo, bool bBE)
 {
 	static char szAddStr[32];
-	sprintf(szAddStr, _SEP_"0x%02X(%d)", pInfo->nazo, pInfo->nazo);
+	sprintf(szAddStr, _SEP_ "0x%02X(%d)", pInfo->nazo, pInfo->nazo);
 	return szAddStr;
 }
 template <>
 char *GetAddStr(T_Preset_24 *pInfo, bool bBE)
 {
 	static char szAddStr[32];
-	sprintf(szAddStr, _SEP_"0x%02X(%d)"_SEP_"0x%02X(%d)", pInfo->nazo[0], pInfo->nazo[0], pInfo->nazo[1], pInfo->nazo[1]);
+	sprintf(szAddStr, _SEP_ "0x%02X(%d)" _SEP_ "0x%02X(%d)", pInfo->nazo[0], pInfo->nazo[0], pInfo->nazo[1], pInfo->nazo[1]);
 	return szAddStr;
 }
 
@@ -318,23 +332,59 @@ void DumpPreset(int i, bool bBE)
 	int height = bBE ? htons(pWh->height) : pWh->height;
 
 	printf(
-		"0x%06x"_SEP_	// pos
-		"%3d"_SEP_		// i
-		"0x%02x"_SEP_	// pol
-		"%3d"_SEP_		// idx
-		"%4d"_SEP_		// width
-		"%4d"_SEP_		// height
-		"%4d"_SEP_		// hFreq
-		"%4d"_SEP_		// vFreq
-		"%4d"_SEP_		// hTotal
-		"%4d"_SEP_		// vTotal
-		"%4d"_SEP_		// hSBP
+		"0x%06x" _SEP_	// pos
+		"%3d" _SEP_		// i
+		"0x%02x" _SEP_	// pol
+		"%3d" _SEP_		// idx
+		"%4d" _SEP_		// width
+		"%4d" _SEP_		// height
+		"%4d" _SEP_		// hFreq
+		"%4d" _SEP_		// vFreq
+		"%4d" _SEP_		// hTotal
+		"%4d" _SEP_		// vTotal
+		"%4d" _SEP_		// hSBP
 		"%4d"			// vSBP
 		"%s\n", 
 		pos, i, pol, idx, width, height, hFreq, vFreq, hTotal, vTotal, hSBP, vSBP, GetAddStr(pInfo, bBE));
 }
-int _tmain(int argc, _TCHAR* argv[])
+
+
+char *MakePath(const char *szBasePath, const char *szAddFname, const char *szModExt=NULL)
 {
+	static char szPath[4096];
+	char	szDrive[256], szDir[256], szFilename[256], szExt[256];
+#ifdef WIN32
+	_splitpath(szBasePath, szDrive, szDir ,szFilename, szExt);
+	strcat(szFilename, szAddFname);
+	if (szModExt) strcpy(szExt, szModExt);
+	_makepath(szPath, szDrive, szDir, szFilename, szExt);
+#else
+	strcpy(szDir, szBasePath);
+	strcpy(szDir, dirname(szDir));
+	strcpy(szFilename, szBasePath);
+	strcpy(szFilename, basename(szFilename));
+	char *p = strchr(szFilename, '.');
+	if (p) {
+	    strcpy(szExt, p);
+	    *p = '\0';
+	}
+	else {
+	    strcpy(szExt, "");
+	}
+	if (szModExt) strcpy(szExt, szModExt);
+	strcpy(szPath, szDir);		
+	strcat(szPath, "/");
+	strcat(szPath, szFilename);
+	strcat(szPath, szAddFname);
+	strcat(szPath, szExt);
+#endif
+	return szPath;
+}
+
+int main(int argc, char* argv[])
+{
+	struct stat st;
+
 	if (argc < 2) {
 		printf("%s firmware.bin (-modify)\n", argv[0]);
 		return 0;
@@ -345,7 +395,8 @@ int _tmain(int argc, _TCHAR* argv[])
 		printf("can't open %s\n", argv[1]);
 		return RC_OPEN_ERROR;
 	}
-	file_len = _filelength(_fileno(fp));
+	stat(argv[1], &st);
+	file_len = st.st_size;
 	fread(buf, file_len, 1, fp);
 	fclose(fp);
 
@@ -354,8 +405,13 @@ int _tmain(int argc, _TCHAR* argv[])
 		return RC_COMP_FORM;
 	}
 
-	char	szPath[_MAX_PATH], szDrive[_MAX_DRIVE], szDir[_MAX_DIR], szFname[_MAX_FNAME], szExt[_MAX_EXT]; 
+	char	szPath[256], szFname[256];
+#ifdef _WIN32
+	char	szDrive[_MAX_DRIVE], szDir[_MAX_DIR], szExt[_MAX_EXT]; 
 	_splitpath(argv[1], szDrive, szDir, szFname, szExt);
+#else
+	strcpy(szFname, basename(argv[1]));
+#endif
 	enMode mode = JudgeMode(szFname);
 	if (mode == EA224WMi) {
 		wh_ofs = 0x14000;	
@@ -440,7 +496,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		mode = EA224WMi;
 	}
 
-	if (2 < argc && _stricmp(argv[2], "-modify") == 0 && 0 <= wh_ofs && 0 <= tbl_ofs ) {
+	if (2 < argc && stricmp(argv[2], "-modify") == 0 && 0 <= wh_ofs && 0 <= tbl_ofs ) {
 		if (mode == EA224WMi) {
 			SetParameter<T_Preset_15>(true,   2, 0x0f,  4, 315, 555,  1104, 567, 263, 41,  768, 512);		// X68000  768x512 31KHz
 			SetParameter<T_Preset_15>(true,  20, 0x0f,  5, 159, 614,  608, 260,  40, 17,  512, 240, 0x2);	// X68000  512x512 15KHz(interlace)
@@ -498,8 +554,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			SetParameter<T_Preset_15>(true,  67, 0x0f, 11, 247, 556,  848, 440,  85, 24,  640, 400, 4);		// PC-98 24KHz
 		}
 
-		strcat(szFname, "_mod");
-		_makepath(szPath, szDrive, szDir, szFname, szExt);
+		strcpy(szPath, MakePath(argv[1], "_mod"));
 		fp = fopen(szPath, "wb");
 		if (!fp) {
 			printf("can't write %s\n", szPath);
@@ -510,7 +565,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 	// width height table
-	printf("offset  "_SEP_"tbl"_SEP_"widt"_SEP_"heig\n");
+	printf("offset  " _SEP_ "tbl" _SEP_ "widt" _SEP_ "heig\n");
 	for (int i=0; i<wh_num; i++) {
 		T_WH wh;
 		int pos = wh_ofs+i*sizeof(wh);
@@ -519,7 +574,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			wh.width = htons(wh.width);
 			wh.height = htons(wh.height);
 		}
-		printf("0x%06x"_SEP_"%3d"_SEP_"%4d"_SEP_"%4d\n", pos, i, wh.width, wh.height);
+		printf("0x%06x" _SEP_ "%3d" _SEP_ "%4d" _SEP_ "%4d\n", pos, i, wh.width, wh.height);
 	}
 
 	// preset table
@@ -537,9 +592,9 @@ int _tmain(int argc, _TCHAR* argv[])
 		strcpy(szAddHeader, "");
 	}
 	else {									// T_Preset_14
-		strcpy(szAddHeader, _SEP_"nazo");
+		strcpy(szAddHeader, _SEP_ "nazo");
 	}
-	printf("offset  "_SEP_"tbl"_SEP_"polf"_SEP_"idx"_SEP_"widt"_SEP_"heig"_SEP_"hFrq"_SEP_"vFrq"_SEP_"hTot"_SEP_"vTot"_SEP_"hSBP"_SEP_"vSBP%s\n", szAddHeader);
+	printf("offset  " _SEP_ "tbl" _SEP_ "polf" _SEP_ "idx" _SEP_ "widt" _SEP_ "heig" _SEP_ "hFrq" _SEP_ "vFrq" _SEP_ "hTot" _SEP_ "vTot" _SEP_ "hSBP" _SEP_ "vSBP%s\n", szAddHeader);
 	for (int i=0; i<tbl_num; i++) {
 		if (mode == TV56031 || mode == KP1208IPS) {
 			DumpPreset<T_Preset_24>(i, false);
